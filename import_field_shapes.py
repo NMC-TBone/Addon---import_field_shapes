@@ -1,7 +1,7 @@
 import bpy
-import os
-import re
 from mathutils import Vector, Matrix
+from pathlib import Path
+import time
 
 
 def import_fbx(folder_path):
@@ -23,11 +23,13 @@ def set_origin(obj):
     bbox = sum((obj.matrix_world @ vertex.co for vertex in mesh_data.vertices), Vector()) / num_vertices
 
     # Move the object origin to bbox
-    obj.location = obj.matrix_world.inverted() @ bbox
+    matrix_world_inv = obj.matrix_world.inverted()
+    obj.location = matrix_world_inv @ bbox
 
     # Move mesh so in opposite direction
+    bbox_offset = matrix_world_inv @ bbox
     for vertex in mesh_data.vertices:
-        vertex.co = obj.matrix_world.inverted() @ (obj.matrix_world @ vertex.co - bbox)
+        vertex.co = matrix_world_inv @ obj.matrix_world @ vertex.co - bbox_offset
 
 
 def create_empty(name, location=(0, 0, 0)):
@@ -69,28 +71,46 @@ class IMPORT_OT_FieldShapes(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        folder = context.scene.field_shapes_folder
-        if not folder:
-            self.report({'ERROR'}, "No path to folder set")
+        if not context.scene.field_shapes_folder:
+            self.report({'ERROR'}, "No folder path set")
             return {'CANCELLED'}
-        file_count = 0
-        for file in os.listdir(folder):
-            if file.endswith('.fbx'):
-                file_count += 1
-                filepath = os.path.join(folder, file)
-                empty_name = re.sub(r'\.fbx$', '', file)
 
+        folder = Path(context.scene.field_shapes_folder)
+        if not folder.is_dir():
+            self.report({'ERROR'}, "Invalid folder path")
+            return {'CANCELLED'}
+
+        fbx_files = list(folder.glob("*.fbx"))
+        if not fbx_files:
+            self.report({'ERROR'}, "No FBX files found in the folder")
+            return {'CANCELLED'}
+
+        start_time = time.time()
+        bpy.context.window_manager.progress_begin(0, len(fbx_files))
+        imported_files = 0
+        for i, file in enumerate(fbx_files):
+            filepath = str(file)
+            empty_name = file.stem
+
+            try:
                 imported_obj = import_fbx(filepath)
-                for ob in imported_obj:
-                    set_origin(ob)
-                    empty = create_empty(empty_name, ob.location)
-                    matrix_world = ob.matrix_world.copy()
-                    ob.parent = empty
-                    ob.matrix_parent_inverse = Matrix.Identity(4)
-                    ob.matrix_world = matrix_world
+            except Exception as e:
+                self.report({'WARNING'}, f"Error importing file {filepath}: {str(e)}")
+                continue
 
-                    separate_parts(ob)
-        self.report({'INFO'}, f"Imported {file_count} fbx files successfully")
+            for ob in imported_obj:
+                set_origin(ob)
+                empty = create_empty(empty_name, ob.location)
+                matrix_world = ob.matrix_world.copy()
+                ob.parent = empty
+                ob.matrix_parent_inverse = Matrix.Identity(4)
+                ob.matrix_world = matrix_world
+                separate_parts(ob)
+            bpy.context.window_manager.progress_update(i)
+            imported_files += 1
+        bpy.context.window_manager.progress_end()
+        elapsed_time = time.time() - start_time
+        self.report({'INFO'}, f"Imported {imported_files} fbx files successfully in {elapsed_time:.2f} seconds")
         return {'FINISHED'}
 
 
