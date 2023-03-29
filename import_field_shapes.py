@@ -115,7 +115,7 @@ class IMPORT_OT_FieldShapes(bpy.types.Operator):
 
 
 class IMPORT_PT_FieldShapes(bpy.types.Panel):
-    bl_idname = 'field_shape.import_field_shapes_panel'
+    bl_idname = 'IMPORT_PT_FieldShapes'
     bl_label = 'Import Field Shapes'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
