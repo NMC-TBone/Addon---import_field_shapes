@@ -11,7 +11,7 @@ bl_info = {
     "author": "[NMC] T-Bone",
     "description": "Import field shapes from a folder containing .fbx files",
     "blender": (3, 0, 0),
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "location": "View3D",
     "warning": "",
     "category": "Generic"
