@@ -39,10 +39,16 @@ def create_empty(name, location=(0, 0, 0)):
     return empty
 
 
-def separate_parts(obj):
-    bpy.context.view_layer.objects.active = obj
-    bpy.context.active_object.select_set(True)
-    # Save the current area type and change it to VIEW_3D
+def separate_all(ob_name_list):
+    last_obj = None
+    for obj in bpy.data.objects:
+        if obj.name in ob_name_list:
+            obj.select_set(True)
+            last_obj = obj
+
+    if last_obj is not None:
+        bpy.context.view_layer.objects.active = last_obj
+
     old_area = bpy.context.area.type
     bpy.context.area.type = 'VIEW_3D'
 
@@ -51,6 +57,7 @@ def separate_parts(obj):
     bpy.ops.mesh.separate(type='LOOSE')
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    bpy.ops.object.select_all(action='DESELECT')
 
     # Restore the original area type
     bpy.context.area.type = old_area
@@ -86,6 +93,7 @@ class IMPORT_OT_FieldShapes(bpy.types.Operator):
             return {'CANCELLED'}
 
         start_time = time.time()
+        all_names = []
         bpy.context.window_manager.progress_begin(0, len(fbx_files))
         imported_files = 0
         for i, file in enumerate(fbx_files):
@@ -99,15 +107,16 @@ class IMPORT_OT_FieldShapes(bpy.types.Operator):
                 continue
 
             for ob in imported_obj:
+                all_names.append(ob.name)
                 set_origin(ob)
                 empty = create_empty(empty_name, ob.location)
                 matrix_world = ob.matrix_world.copy()
                 ob.parent = empty
                 ob.matrix_parent_inverse = Matrix.Identity(4)
                 ob.matrix_world = matrix_world
-                separate_parts(ob)
             bpy.context.window_manager.progress_update(i)
             imported_files += 1
+        separate_all(all_names)
         bpy.context.window_manager.progress_end()
         elapsed_time = time.time() - start_time
         self.report({'INFO'}, f"Imported {imported_files} fbx files successfully in {elapsed_time:.2f} seconds")
